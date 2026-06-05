@@ -145,7 +145,7 @@ const main = async (): Promise<void> => {
 
     if (heals <= 0) {
       warn("No healing items — buying 30…");
-      await api("PUT", "/shop/buyItem/5", auth, { itemId: 5, quantity: 30 });
+      await api("PUT", "/shop/buyItem/1", auth, { itemId: 5, quantity: 30 });
       heals += 30;
       ok(`Bought 30 healing items. Stock: ${heals}`);
       money = +(await api<MoneyResponse>("GET", "/player/getmoney", auth));
