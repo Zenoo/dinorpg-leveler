@@ -1,0 +1,25 @@
+{
+  "name": "dinorpg-leveler",
+  "version": "1.0.0",
+  "description": "",
+  "types": "module",
+  "scripts": {
+    "start": "tsx leveler.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^11.1.3",
+      "onFail": "download"
+    }
+  },
+  "type": "module",
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
+  }
+}
