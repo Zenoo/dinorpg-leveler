@@ -37,13 +37,14 @@ const saveCredentials = (creds: Credentials): void => {
   fs.writeFileSync(SAVE_FILE, JSON.stringify(creds, null, 2), "utf-8");
 }
 
-const notifyLevelUp = (dinozId: number, money: number, dinozHp: number): void => {
+const notifyLevelUp = (state: State, average: Average): void => {
   console.log("");
   console.log(`${C.bold}${C.green}╔══════════════════════════════════════╗${C.reset}`);
-  console.log(`${C.bold}${C.green}║  🎉  LEVEL UP!  Dinoz #${dinozId}  🎉    ║${C.reset}`);
+  console.log(`${C.bold}${C.green}║  🎉  LEVEL UP!  Dinoz #${state.dinoz.id}  🎉    ║${C.reset}`);
   console.log(`${C.bold}${C.green}╚══════════════════════════════════════╝${C.reset}`);
   console.log("");
-  console.log(`${C.bold}Final stats:${C.reset} Gold: ${money} | Dinoz HP: ${dinozHp}`);
+  console.log(`${C.bold}Final stats:${C.reset} Gold: ${state.money} | Dinoz HP: ${state.dinoz.hp}/${state.dinoz.maxHp}`);
+  console.log(`${C.bold}Average per fight:${C.reset} +${average.goldEarned.toFixed(2)}g | +${average.xpEarned.toFixed(2)}XP | −${average.hpLost.toFixed(2)}HP`);
   process.stdout.write("\x07\x07");
 }
 
@@ -70,12 +71,24 @@ const api = async <T>(
 // ── Types ────────────────────────────────────────────────────
 type InventoryItem = { id: number; quantity: number; };
 type MoneyResponse = string;
-type FicheResponse  = { life: number; };
+type FicheResponse  = { life: number; maxLife: number; };
 type HealResponse   = { category: string; value: number; };
 type FightResponse  = {
   goldEarned: number;
+  xpEarned: number;
   levelUp:    boolean;
   hpLost:     { id: number; hpLost: number }[];
+}
+type State = {
+  money: number;
+  dinoz: { id: number; hp: number; maxHp: number; };
+  potions: number;
+  heals: { small: number; big: number; };
+}
+type Average = {
+  hpLost: number;
+  xpEarned: number;
+  goldEarned: number;
 }
 
 // ── Prompt helper: show saved value, keep it if user hits Enter
@@ -109,20 +122,43 @@ const main = async (): Promise<void> => {
 
   const auth = makeAuth(userCookie, tokenCookie);
 
+  const state: State = {
+    money: 0,
+    dinoz: {
+      id: dinozId,
+      hp: 0,
+      maxHp: 0,
+    },
+    potions: 0,
+    heals: {
+      small: 0,
+      big: 0,
+    }
+  };
+  const average = {
+    hpLost: 0,
+    xpEarned: 0,
+    goldEarned: 0,
+  };
+  let fightsCount = 0;
+
   // ── Initial fetch ────────────────────────────────────────
   log("Fetching inventory…");
   const inventory = await api<InventoryItem[]>("GET", "/inventory/all", auth);
-  let potions = inventory.find(i => i.id === 1)?.quantity ?? 0;
-  let heals   = inventory.find(i => i.id === 5)?.quantity ?? 0;
-  ok(`Potions: ${potions}  |  Healing items: ${heals}`);
+  state.potions = inventory.find(i => i.id === 1)?.quantity ?? 0;
+  state.heals.small = inventory.find(i => i.id === 5)?.quantity ?? 0;
+  state.heals.big = inventory.find(i => i.id === 4)?.quantity ?? 0;
+  ok(`Potions: ${state.potions}  |  Small Heals: ${state.heals.small}  |  Big Heals: ${state.heals.big}`);
 
   log("Fetching wallet…");
-  let money = +(await api<MoneyResponse>("GET", "/player/getmoney", auth));
-  ok(`Gold: ${money}`);
+  state.money = +(await api<MoneyResponse>("GET", "/player/getmoney", auth));
+  ok(`Gold: ${state.money}`);
 
   log("Fetching dinoz fiche…");
-  let dinozHp = (await api<FicheResponse>("GET", `/dinoz/fiche/${dinozId}`, auth)).life;
-  ok(`Dinoz #${dinozId} — HP: ${dinozHp}`);
+  const dinozData = await api<FicheResponse>("GET", `/dinoz/fiche/${state.dinoz.id}`, auth);
+  state.dinoz.hp = dinozData.life;
+  state.dinoz.maxHp = dinozData.maxLife;
+  ok(`Dinoz #${state.dinoz.id} — HP: ${state.dinoz.hp}/${state.dinoz.maxHp}`);
 
   // ── Main loop ────────────────────────────────────────────
   let loop = 0;
@@ -130,57 +166,78 @@ const main = async (): Promise<void> => {
   while (true) {
     loop++;
     console.log("");
-    log(`--- Loop #${loop} | Gold: ${money} | HP: ${dinozHp} | Potions: ${potions} | Heals: ${heals} ---`);
+    log(`--- Loop #${loop} | Gold: ${state.money} | HP: ${state.dinoz.hp}/${state.dinoz.maxHp} | Potions: ${state.potions} | Small Heals: ${state.heals.small} | Big Heals: ${state.heals.big} ---`);
 
-    if (money < 100_000) { warn(`Gold below 100 000 (${money}). Stopping.`); break; }
+    if (state.money < 100_000) { warn(`Gold below 100 000 (${state.money}). Stopping.`); break; }
 
-    if (potions < 100) {
-      warn(`Only ${potions} potions — buying 100…`);
+    if (state.potions < 100) {
+      warn(`Only ${state.potions} potions — buying 100…`);
       await api("PUT", "/shop/buyItem/1", auth, { itemId: 1, quantity: 100 });
-      potions += 100;
-      ok(`Bought 100 potions. Stock: ${potions}`);
-      money = +(await api<MoneyResponse>("GET", "/player/getmoney", auth));
-      ok(`Updated gold: ${money}`);
+      state.potions += 100;
+      ok(`Bought 100 potions. Stock: ${state.potions}`);
+      state.money = +(await api<MoneyResponse>("GET", "/player/getmoney", auth));
+      ok(`Updated gold: ${state.money}`);
     }
 
-    if (heals <= 0) {
-      warn("No healing items — buying 30…");
+    if (state.heals.small <= 0) {
+      warn("No small healing items — buying 30…");
       await api("PUT", "/shop/buyItem/1", auth, { itemId: 5, quantity: 30 });
-      heals += 30;
-      ok(`Bought 30 healing items. Stock: ${heals}`);
-      money = +(await api<MoneyResponse>("GET", "/player/getmoney", auth));
-      ok(`Updated gold: ${money}`);
+      state.heals.small += 30;
+      ok(`Bought 30 small healing items. Stock: ${state.heals.small}`);
+      state.money = +(await api<MoneyResponse>("GET", "/player/getmoney", auth));
+      ok(`Updated gold: ${state.money}`);
     }
 
-    if (dinozHp < 50) {
-      warn(`HP low (${dinozHp}) — using a healing item…`);
-      const healResult = await api<HealResponse[]>("GET", `/inventory/${dinozId}/5`, auth);
+    if (state.heals.big <= 0) {
+      warn("No big healing items — buying 10…");
+      await api("PUT", "/shop/buyItem/1", auth, { itemId: 4, quantity: 10 });
+      state.heals.big += 10;
+      ok(`Bought 10 big healing items. Stock: ${state.heals.big}`);
+      state.money = +(await api<MoneyResponse>("GET", "/player/getmoney", auth));
+      ok(`Updated gold: ${state.money}`);
+    }
+
+    // Use big heals for 150HP+ Dinoz, small heals for lower HP thresholds
+    let healSize: "small" | "big" = "small";
+    if (state.dinoz.maxHp > 150) {
+      healSize = "big";
+    }
+
+    if ((healSize === "big" && state.dinoz.maxHp - state.dinoz.hp >= 110) || (healSize === "small" && state.dinoz.maxHp - state.dinoz.hp >= 33)) {
+      warn(`HP low (${state.dinoz.hp}) — using a healing item…`);
+      const healResult = await api<HealResponse[]>("GET", `/inventory/${state.dinoz.id}/${healSize === "big" ? 4 : 5}`, auth);
       const healValue  = healResult[0]?.value ?? 0;
-      dinozHp += healValue;
-      heals   -= 1;
-      ok(`Healed +${healValue} HP → ${dinozHp}  | Heals left: ${heals}`);
+      state.dinoz.hp += healValue;
+      state.heals[healSize] -= 1;
+      ok(`Healed +${healValue} HP → ${state.dinoz.hp}  | Heals left: ${state.heals[healSize]}`);
     }
 
     log("Using potion (IRMA)…");
-    await api("POST", `/dinoz/${dinozId}/irma`, auth);
-    potions--;
-    ok(`Potion used. Stock: ${potions}`);
+    await api("POST", `/dinoz/${state.dinoz.id}/irma`, auth);
+    state.potions--;
+    ok(`Potion used. Stock: ${state.potions}`);
 
     log("Fighting…");
-    const fight  = await api<FightResponse>("PUT", "/fight", auth, { dinozId });
-    const hpLost = fight.hpLost.find(e => e.id === dinozId)?.hpLost ?? 0;
-    money   += fight.goldEarned;
-    dinozHp -= hpLost;
-    ok(`Fight done — +${fight.goldEarned}g | −${hpLost}HP | Gold: ${money} | HP: ${dinozHp}`);
+    const fight  = await api<FightResponse>("PUT", "/fight", auth, { dinozId: state.dinoz.id });
+    const hpLost = fight.hpLost.find(e => e.id === state.dinoz.id)?.hpLost ?? 0;
+    state.money   += fight.goldEarned;
+    state.dinoz.hp -= hpLost;
+    ok(`Fight done — +${fight.goldEarned}g | −${hpLost}HP | Gold: ${state.money} | HP: ${state.dinoz.hp}`);
+
+    // Stats
+    fightsCount++;
+    average.hpLost = ((average.hpLost * (fightsCount - 1)) + hpLost) / fightsCount;
+    average.goldEarned = ((average.goldEarned * (fightsCount - 1)) + fight.goldEarned) / fightsCount;
+    average.xpEarned = ((average.xpEarned * (fightsCount - 1)) + fight.xpEarned) / fightsCount;
 
     if (fight.levelUp) {
-      notifyLevelUp(dinozId, money, dinozHp);
+      notifyLevelUp(state, average);
       process.exit(0);
     }
   }
 
   console.log("");
-  log(`Session ended. Final gold: ${money} | Dinoz HP: ${dinozHp}`);
+  log(`Session ended. Final gold: ${state.money} | Dinoz HP: ${state.dinoz.hp}`);
 }
 
 main().catch(e => { console.error(e); process.exit(1); });
