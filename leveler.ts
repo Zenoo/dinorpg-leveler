@@ -38,6 +38,10 @@ const saveCredentials = (creds: Credentials): void => {
   fs.writeFileSync(SAVE_FILE, JSON.stringify(creds, null, 2), "utf-8");
 }
 
+const beep = () => {
+  process.stdout.write("\x07\x07"); // Beep sound
+}
+
 const notifyLevelUp = (state: State, average: Average): void => {
   console.log("");
   console.log(`${C.bold}${C.green}╔══════════════════════════════════════╗${C.reset}`);
@@ -56,7 +60,7 @@ const notifyLevelUp = (state: State, average: Average): void => {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   })}❤️`);
-  process.stdout.write("\x07\x07");
+  beep();
 }
 
 // ── Auth / API ───────────────────────────────────────────────
@@ -307,7 +311,12 @@ const main = async (): Promise<void> => {
   }
 
   console.log("");
-  log(`Session ended. Final stats: Gold: ${state.money} | Dinoz HP: ${state.dinoz.hp}/${state.dinoz.maxHp} | Potions: ${state.potions} | Small Heals: ${state.heals.small} | Big Heals: ${state.heals.big} | Merguez: ${state.merguez.count}`);
+  beep();
+  process.exit(0);
 }
 
-main().catch(e => { console.error(e); process.exit(1); });
+main().catch(e => {
+  console.error(e);
+  beep();
+  process.exit(1);
+});
