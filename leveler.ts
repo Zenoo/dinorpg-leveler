@@ -44,7 +44,7 @@ const notifyLevelUp = (state: State, average: Average): void => {
   console.log(`${C.bold}${C.green}║  🎉  LEVEL UP!  Dinoz #${state.dinoz.id}  🎉    ║${C.reset}`);
   console.log(`${C.bold}${C.green}╚══════════════════════════════════════╝${C.reset}`);
   console.log("");
-  console.log(`${C.bold}Final stats:${C.reset} Gold: ${state.money} | Dinoz HP: ${state.dinoz.hp}/${state.dinoz.maxHp} | Small heals used: ${state.heals.used.small} | Big heals used: ${state.heals.used.big}`);
+  console.log(`${C.bold}Final stats:${C.reset} Gold: ${state.money} | Dinoz HP: ${state.dinoz.hp}/${state.dinoz.maxHp} | Small heals used: ${state.heals.used.small} | Big heals used: ${state.heals.used.big} | Merguez used: ${state.merguez.used}`);
   console.log(`${C.bold}Average per fight:${C.reset} +${average.goldEarned.toFixed(2)}g | +${average.xpEarned.toFixed(2)}XP | −${average.hpLost.toFixed(2)}HP`);
   process.stdout.write("\x07\x07");
 }
@@ -79,13 +79,17 @@ type FightResponse  = {
   xpEarned: number;
   levelUp:    boolean;
   hpLost:     { id: number; hpLost: number }[];
+  itemsUsed: { id: number; itemsUsed: number[]; }[];
 }
 type State = {
   money: number;
   dinoz: { id: number; hp: number; maxHp: number; items: number[]; maxItems: number; };
   potions: number;
-  useMerguez: boolean;
-  merguez: number;
+  merguez: {
+    use: boolean;
+    count: number;
+    used: number;
+  };
   heals: {
     small: number;
     big: number;
@@ -141,8 +145,11 @@ const main = async (): Promise<void> => {
       maxItems: 0,
     },
     potions: 0,
-    merguez: 0,
-    useMerguez: shouldUseMerguez,
+    merguez: {
+      use: shouldUseMerguez,
+      count: 0,
+      used: 0,
+    },
     heals: {
       small: 0,
       big: 0,
@@ -160,10 +167,10 @@ const main = async (): Promise<void> => {
   log("Fetching inventory…");
   const inventory = await api<InventoryItem[]>("GET", "/inventory/all", auth);
   state.potions = inventory.find(i => i.id === 1)?.quantity ?? 0;
-  state.merguez = inventory.find(i => i.id === 8)?.quantity ?? 0;
+  state.merguez.count = inventory.find(i => i.id === 8)?.quantity ?? 0;
   state.heals.small = inventory.find(i => i.id === 5)?.quantity ?? 0;
   state.heals.big = inventory.find(i => i.id === 4)?.quantity ?? 0;
-  ok(`Potions: ${state.potions}  |  Small Heals: ${state.heals.small}  |  Big Heals: ${state.heals.big}  |  Merguez: ${state.merguez}`);
+  ok(`Potions: ${state.potions}  |  Small Heals: ${state.heals.small}  |  Big Heals: ${state.heals.big}  |  Merguez: ${state.merguez.count}`);
 
   log("Fetching wallet…");
   state.money = +(await api<MoneyResponse>("GET", "/player/getmoney", auth));
@@ -183,9 +190,9 @@ const main = async (): Promise<void> => {
   while (true) {
     loop++;
     console.log("");
-    log(`--- Loop #${loop} | Gold: ${state.money} | HP: ${state.dinoz.hp}/${state.dinoz.maxHp} | Potions: ${state.potions} | Small Heals: ${state.heals.small} | Big Heals: ${state.heals.big} ---`);
+    log(`--- Loop #${loop} | Gold: ${state.money} | HP: ${state.dinoz.hp}/${state.dinoz.maxHp} | Potions: ${state.potions} | Small Heals: ${state.heals.small} | Big Heals: ${state.heals.big} | Merguez: ${state.merguez.count} ---`);
 
-    if (state.useMerguez && state.merguez === 0) {
+    if (state.merguez.use && state.merguez.count === 0) {
       error("No merguez left — please restock and try again. Stopping.");
       break;
     }
@@ -236,18 +243,18 @@ const main = async (): Promise<void> => {
     }
 
     // Refill merguez slots
-    if (state.useMerguez && state.dinoz.items.length < state.dinoz.maxItems) {
+    if (state.merguez.use && state.dinoz.items.length < state.dinoz.maxItems) {
       const slotsToFill = state.dinoz.maxItems - state.dinoz.items.length;
-      const merguezToUse = Math.min(state.merguez, slotsToFill);
+      const merguezToUse = Math.min(state.merguez.count, slotsToFill);
 
       if (merguezToUse > 0) {
         log(`Refilling inventory with ${merguezToUse} merguez…`);
         for (let i = 0; i < merguezToUse; i++) {
           await api("PUT", `/inventory/${state.dinoz.id}`, auth, { itemId: 8, equip: true });
-          state.merguez -= 1;
+          state.merguez.count -= 1;
           state.dinoz.items.push(8);
         }
-        ok(`Inventory refilled. Merguez left: ${state.merguez} | Inventory: ${state.dinoz.items.length}/${state.dinoz.maxItems}`);
+        ok(`Inventory refilled. Merguez left: ${state.merguez.count} | Inventory: ${state.dinoz.items.length}/${state.dinoz.maxItems}`);
       }
     }
 
@@ -261,6 +268,17 @@ const main = async (): Promise<void> => {
     const hpLost = fight.hpLost.find(e => e.id === state.dinoz.id)?.hpLost ?? 0;
     state.money   += fight.goldEarned;
     state.dinoz.hp -= hpLost;
+    
+    const merguezUsed = fight.itemsUsed.find(e => e.id === state.dinoz.id)?.itemsUsed.filter(id => id === 8).length ?? 0;
+    if (merguezUsed > 0) {
+      for (let i = 0; i < merguezUsed; i++) {
+        const index = state.dinoz.items.indexOf(8);
+        if (index !== -1) {
+          state.dinoz.items.splice(index, 1);
+        }
+      }
+    }
+
     ok(`Fight done — +${fight.goldEarned}g | −${hpLost}HP | Gold: ${state.money} | HP: ${state.dinoz.hp}`);
 
     // Stats
@@ -276,7 +294,7 @@ const main = async (): Promise<void> => {
   }
 
   console.log("");
-  log(`Session ended. Final stats: Gold: ${state.money} | Dinoz HP: ${state.dinoz.hp}/${state.dinoz.maxHp} | Potions: ${state.potions} | Small Heals: ${state.heals.small} | Big Heals: ${state.heals.big}`);
+  log(`Session ended. Final stats: Gold: ${state.money} | Dinoz HP: ${state.dinoz.hp}/${state.dinoz.maxHp} | Potions: ${state.potions} | Small Heals: ${state.heals.small} | Big Heals: ${state.heals.big} | Merguez: ${state.merguez.count}`);
 }
 
 main().catch(e => { console.error(e); process.exit(1); });
