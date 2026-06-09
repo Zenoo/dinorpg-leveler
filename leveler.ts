@@ -271,6 +271,8 @@ const main = async (): Promise<void> => {
     
     const merguezUsed = fight.itemsUsed.find(e => e.id === state.dinoz.id)?.itemsUsed.filter(id => id === 8).length ?? 0;
     if (merguezUsed > 0) {
+      state.merguez.used += merguezUsed;
+
       for (let i = 0; i < merguezUsed; i++) {
         const index = state.dinoz.items.indexOf(8);
         if (index !== -1) {
