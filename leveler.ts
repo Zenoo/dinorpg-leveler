@@ -44,8 +44,18 @@ const notifyLevelUp = (state: State, average: Average): void => {
   console.log(`${C.bold}${C.green}║  🎉  LEVEL UP!  Dinoz #${state.dinoz.id}  🎉    ║${C.reset}`);
   console.log(`${C.bold}${C.green}╚══════════════════════════════════════╝${C.reset}`);
   console.log("");
-  console.log(`${C.bold}Final stats:${C.reset} Gold: ${state.money.toLocaleString('fr-FR')} | Dinoz HP: ${state.dinoz.hp}/${state.dinoz.maxHp} | Fights: ${state.fights} | Small heals used: ${state.heals.used.small} | Big heals used: ${state.heals.used.big} | Merguez used: ${state.merguez.used}`);
-  console.log(`${C.bold}Average per fight:${C.reset} +${average.goldEarned.toFixed(2)}g | +${average.xpEarned.toFixed(2)}XP | −${average.hpLost.toFixed(2)}HP`);
+  console.log(`${C.bold}Final stats:${C.reset} ${state.money.toLocaleString('fr-FR')}🪙 | ${state.dinoz.hp}/${state.dinoz.maxHp}❤️`);
+  console.log(`${C.bold}Used: ${state.fights}⚔️ | ${state.heals.used.small}🍰 | ${state.heals.used.big}🫓 | ${state.merguez.used}🌭`);
+  console.log(`${C.bold}Average per fight:${C.reset} +${average.goldEarned.toLocaleString('fr-FR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })}🪙 | +${average.xpEarned.toLocaleString('fr-FR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })}XP | −${average.hpLost.toLocaleString('fr-FR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })}❤️`);
   process.stdout.write("\x07\x07");
 }
 
