@@ -44,7 +44,7 @@ const notifyLevelUp = (state: State, average: Average): void => {
   console.log(`${C.bold}${C.green}║  🎉  LEVEL UP!  Dinoz #${state.dinoz.id}  🎉    ║${C.reset}`);
   console.log(`${C.bold}${C.green}╚══════════════════════════════════════╝${C.reset}`);
   console.log("");
-  console.log(`${C.bold}Final stats:${C.reset} Gold: ${state.money} | Dinoz HP: ${state.dinoz.hp}/${state.dinoz.maxHp} | Small heals used: ${state.heals.used.small} | Big heals used: ${state.heals.used.big} | Merguez used: ${state.merguez.used}`);
+  console.log(`${C.bold}Final stats:${C.reset} Gold: ${state.money.toLocaleString('fr-FR')} | Dinoz HP: ${state.dinoz.hp}/${state.dinoz.maxHp} | Fights: ${state.fights} | Small heals used: ${state.heals.used.small} | Big heals used: ${state.heals.used.big} | Merguez used: ${state.merguez.used}`);
   console.log(`${C.bold}Average per fight:${C.reset} +${average.goldEarned.toFixed(2)}g | +${average.xpEarned.toFixed(2)}XP | −${average.hpLost.toFixed(2)}HP`);
   process.stdout.write("\x07\x07");
 }
@@ -83,6 +83,7 @@ type FightResponse  = {
 }
 type State = {
   money: number;
+  fights: number;
   dinoz: { id: number; hp: number; maxHp: number; items: number[]; maxItems: number; };
   potions: number;
   merguez: {
@@ -137,6 +138,7 @@ const main = async (): Promise<void> => {
 
   const state: State = {
     money: 0,
+    fights: 0,
     dinoz: {
       id: dinozId,
       hp: 0,
@@ -161,7 +163,6 @@ const main = async (): Promise<void> => {
     xpEarned: 0,
     goldEarned: 0,
   };
-  let fightsCount = 0;
 
   // ── Initial fetch ────────────────────────────────────────
   log("Fetching inventory…");
@@ -284,10 +285,10 @@ const main = async (): Promise<void> => {
     ok(`Fight done — +${fight.goldEarned}g | −${hpLost}HP | Gold: ${state.money} | HP: ${state.dinoz.hp}`);
 
     // Stats
-    fightsCount++;
-    average.hpLost = ((average.hpLost * (fightsCount - 1)) + hpLost) / fightsCount;
-    average.goldEarned = ((average.goldEarned * (fightsCount - 1)) + fight.goldEarned) / fightsCount;
-    average.xpEarned = ((average.xpEarned * (fightsCount - 1)) + fight.xpEarned) / fightsCount;
+    state.fights++;
+    average.hpLost = ((average.hpLost * (state.fights - 1)) + hpLost) / state.fights;
+    average.goldEarned = ((average.goldEarned * (state.fights - 1)) + fight.goldEarned) / state.fights;
+    average.xpEarned = ((average.xpEarned * (state.fights - 1)) + fight.xpEarned) / state.fights;
 
     if (fight.levelUp) {
       notifyLevelUp(state, average);
